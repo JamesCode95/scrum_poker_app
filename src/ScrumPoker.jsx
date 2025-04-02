@@ -1,95 +1,197 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
+import { votesRef, usersRef, set, update, onValue } from './firebaseConfig'; // Import Firebase v9 methods
 
 const POINTS = [1, 2, 3, 5, 8, 13];
 
 export default function ScrumPoker() {
   const [votes, setVotes] = useState({});
+  const [users, setUsers] = useState([]);
   const [reveal, setReveal] = useState(false);
   const [name, setName] = useState("");
-  const [warningMessage, setWarningMessage] = useState("");
+  const [selectedVote, setSelectedVote] = useState(null); // Track the user's selected vote
+
+  // Listen for vote changes from Firebase
+  useEffect(() => {
+    // Fetch votes and revealVotes state
+    onValue(votesRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        setVotes(data.votes || {});
+        setReveal(data.revealVotes || false);
+      }
+    });
+
+    onValue(usersRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        setUsers(Object.keys(data)); // Extract user names
+      }
+    });
+
+    return () => {
+      // Firebase cleanup (not needed in v9, as we aren't using off method)
+    };
+  }, []);
 
   const handleVote = (point) => {
     if (name) {
-      if (votes[name]) {
-        // If the user already voted, show warning
-        setWarningMessage("Not today satan! No changing your mind...");
-      } else {
-        setVotes((prev) => ({ ...prev, [name]: point }));
-        setWarningMessage(""); // Clear any warnings
+      update(votesRef, {
+        [`votes/${name}`]: point,
+      });
+      setSelectedVote(point); // Update the selected vote for the user
+    }
+  };
+
+  const handleJoin = () => {
+    if (name) {
+      let uniqueName = name;
+      // Check if the user already exists
+      if (users.includes(name)) {
+        let counter = 1;
+        while (users.includes(`${name}${counter}`)) {
+          counter++;
+        }
+        uniqueName = `${name}${counter}`; // Append number to make it unique
       }
+
+      update(usersRef, {
+        [uniqueName]: true,
+      });
+      setName(uniqueName); // Update the name with the unique one
     }
   };
 
   const clearVotes = () => {
     setVotes({});
     setReveal(false);
-    setWarningMessage(""); // Clear any warning on reset
+    setSelectedVote(null); // Reset selected vote (remove highlight/border)
+    set(votesRef, { votes: {}, revealVotes: false }); // Clear votes and reset reveal state in Firebase
   };
 
-  const toggleReveal = () => {
-    setReveal((prev) => !prev);
+  const clearUsers = () => {
+    setUsers([]);
+    set(usersRef, {}); // Clear users from Firebase
+  };
+
+  const cleanSession = () => {
+    setUsers([]);
+    setVotes({});
+    setSelectedVote(null); // Reset selected vote (remove highlight/border)
+    set(usersRef, {}); // Clear users from Firebase
+    set(votesRef, { votes: {}, revealVotes: false }); // Clear votes and reset reveal state in Firebase
+  };
+
+  // Toggle revealVotes state between true and false
+  const revealVotesHandler = () => {
+    const newRevealState = !reveal;  // Toggle the reveal state
+    setReveal(newRevealState);  // Update the local state
+
+    // Update the revealVotes state in Firebase
+    set(votesRef, { 
+      votes, 
+      revealVotes: newRevealState 
+    });
   };
 
   return (
-    <div className="bg-gray-100 min-h-screen flex flex-col items-center justify-center p-6">
-      <div className="bg-white p-8 rounded-lg shadow-xl w-full max-w-3xl text-center">
-        <h1 className="text-3xl font-bold mb-6 text-blue-500">Scrum Poker</h1>
-        
-        <input
-          className="mb-6 p-3 border-2 border-gray-300 rounded w-full text-lg"
-          type="text"
-          placeholder="Enter your name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
+    <div className="bg-gray-100 p-6 md:p-8 max-w-4xl mx-auto rounded-lg shadow-lg">
+      {/* Title & Join Section */}
+      <motion.div 
+        className="text-center mb-8"
+        initial={{ opacity: 0 }} 
+        animate={{ opacity: 1 }} 
+        transition={{ duration: 0.5 }}
+      >
+        <h1 className="text-4xl font-bold text-gray-800 mb-4">Scrum Poker</h1>
+        <div className="mb-4 flex justify-center items-center space-x-2">
+          <input
+            className="p-2 border rounded-md text-lg w-64"
+            type="text"
+            placeholder="Enter your name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+          <button
+            className="p-2 bg-blue-500 text-white rounded-md text-lg hover:bg-blue-600 transition"
+            onClick={handleJoin}
+          >
+            Join
+          </button>
+        </div>
+      </motion.div>
 
+      {/* Voting Section */}
+      <motion.div 
+        className="text-center mb-8"
+        initial={{ opacity: 0, scale: 0 }} 
+        animate={{ opacity: 1, scale: 1}} 
+        transition={{ duration: 0.5 }}
+      >
         <div className="grid grid-cols-3 gap-4 mb-6">
           {POINTS.map((point) => (
-            <motion.button
+            <button
               key={point}
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.95 }}
-              className="p-4 bg-blue-500 text-white rounded-xl text-lg font-semibold"
               onClick={() => handleVote(point)}
+              className={`p-4 rounded-lg text-xl transition ${selectedVote === point ? 'border-4 border-orange-500' : 'bg-blue-500 text-white hover:bg-blue-600'}`}
             >
               {point}
-            </motion.button>
+            </button>
           ))}
         </div>
 
-        {warningMessage && (
-          <div className="mb-4 text-red-500 font-semibold">
-            {warningMessage}
-          </div>
-        )}
+        {/* Reveal Votes button */}
+        <button
+          className="p-3 bg-gray-500 text-white rounded-lg m-2 w-80 hover:bg-gray-600 transition"
+          onClick={revealVotesHandler}
+        >
+          {reveal ? "Hide Votes" : "Reveal Votes"}
+        </button>
 
-        <div className="flex justify-center gap-4 mb-6">
-          <button
-            className="bg-green-500 text-white py-2 px-4 rounded-xl font-semibold text-lg"
-            onClick={toggleReveal}
-          >
-            {reveal ? "Hide Votes" : "Reveal Votes"}
-          </button>
-          <button
-            className="bg-red-500 text-white py-2 px-4 rounded-xl font-semibold text-lg"
-            onClick={clearVotes}
-          >
-            Clear Votes
-          </button>
-        </div>
+        {/* Clear Votes button */}
+        <button
+          className="p-3 bg-gray-500 text-white rounded-lg m-2 w-80 hover:bg-gray-600 transition"
+          onClick={clearVotes}
+        >
+          Clear Votes
+        </button>
 
-        <div className="grid grid-cols-1 gap-4">
-          {Object.entries(votes).map(([user, point]) => (
-            <div
-              key={user}
-              className="p-4 bg-gray-200 border-2 border-gray-400 rounded-lg text-lg font-bold"
-            >
-              {user}: {reveal ? point : "?"}
+        {/* Clear Users button */}
+        <button
+          className="p-3 bg-gray-500 text-white rounded-lg m-2 w-80 hover:bg-gray-600 transition"
+          onClick={clearUsers}
+        >
+          Clear Users
+        </button>
+
+        {/* Clean Session button */}
+        <button
+          className="p-3 bg-gray-500 text-white rounded-lg m-2 w-80 hover:bg-gray-600 transition"
+          onClick={cleanSession}
+        >
+          Clean Session
+        </button>
+      </motion.div>
+
+      {/* Displaying votes for each user */}
+      <motion.div 
+        className="space-y-4 mb-8"
+        initial={{ opacity: 0 }} 
+        animate={{ opacity: 1 }} 
+        transition={{ duration: 0.5 }}
+      >
+        {users.map((user) => (
+          <div key={user} className="p-4 border rounded-lg bg-white text-lg font-semibold text-gray-800 shadow-md">
+            <div className="flex justify-between items-center">
+              <span>{user}</span>
+              {/* Display the vote only if reveal is true or the user is viewing their own vote */}
+              <span className="text-gray-600">
+                {reveal || votes[user] === selectedVote ? votes[user] : "?"}
+              </span>
             </div>
-          ))}
-        </div>
-      </div>
+          </div>
+        ))}
+      </motion.div>
     </div>
   );
 }
