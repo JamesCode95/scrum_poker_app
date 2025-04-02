@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { votesRef, usersRef, set, update, onValue } from './firebaseConfig'; // Import Firebase v9 methods
+import { votesRef, usersRef, set, update, onValue, onChildAdded, onChildRemoved } from './firebaseConfig';
 
 const POINTS = [1, 2, 3, 5, 8, 13];
 
@@ -9,12 +9,11 @@ export default function ScrumPoker() {
   const [users, setUsers] = useState([]);
   const [reveal, setReveal] = useState(false);
   const [name, setName] = useState("");
-  const [selectedVote, setSelectedVote] = useState(null); // Track the user's selected vote
+  const [selectedVote, setSelectedVote] = useState(null); 
 
-  // Listen for vote changes from Firebase
+  // Listen for changes from Firebase
   useEffect(() => {
-    // Fetch votes and revealVotes state
-    onValue(votesRef, (snapshot) => {
+    const fetchVotes = onValue(votesRef, (snapshot) => {
       const data = snapshot.val();
       if (data) {
         setVotes(data.votes || {});
@@ -22,15 +21,20 @@ export default function ScrumPoker() {
       }
     });
 
-    onValue(usersRef, (snapshot) => {
-      const data = snapshot.val();
-      if (data) {
-        setUsers(Object.keys(data)); // Extract user names
-      }
+    // Listen for users being added or removed in real-time
+    const fetchUsers = onChildAdded(usersRef, (snapshot) => {
+      const userName = snapshot.key;
+      setUsers((prevUsers) => [...prevUsers, userName]); 
+    });
+
+    const removeUserListener = onChildRemoved(usersRef, (snapshot) => {
+      const userName = snapshot.key;
+      setUsers((prevUsers) => prevUsers.filter(user => user !== userName));
     });
 
     return () => {
-      // Firebase cleanup (not needed in v9, as we aren't using off method)
+      fetchVotes();
+      removeUserListener();
     };
   }, []);
 
@@ -39,55 +43,57 @@ export default function ScrumPoker() {
       update(votesRef, {
         [`votes/${name}`]: point,
       });
-      setSelectedVote(point); // Update the selected vote for the user
+
+      setSelectedVote(point); 
     }
   };
 
   const handleJoin = () => {
     if (name) {
       let uniqueName = name;
-      // Check if the user already exists
+
       if (users.includes(name)) {
         let counter = 1;
         while (users.includes(`${name}${counter}`)) {
           counter++;
         }
-        uniqueName = `${name}${counter}`; // Append number to make it unique
+        uniqueName = `${name}${counter}`;
       }
 
       update(usersRef, {
         [uniqueName]: true,
       });
-      setName(uniqueName); // Update the name with the unique one
+      setName(uniqueName);
     }
   };
 
   const clearVotes = () => {
-    setVotes({});
-    setReveal(false);
-    setSelectedVote(null); // Reset selected vote (remove highlight/border)
-    set(votesRef, { votes: {}, revealVotes: false }); // Clear votes and reset reveal state in Firebase
+    set(votesRef, {
+      votes: {},
+      revealVotes: false,
+    });
+
+    setSelectedVote(null);
   };
 
   const clearUsers = () => {
     setUsers([]);
-    set(usersRef, {}); // Clear users from Firebase
+    set(usersRef, {});
   };
 
   const cleanSession = () => {
     setUsers([]);
     setVotes({});
-    setSelectedVote(null); // Reset selected vote (remove highlight/border)
-    set(usersRef, {}); // Clear users from Firebase
-    set(votesRef, { votes: {}, revealVotes: false }); // Clear votes and reset reveal state in Firebase
+    setSelectedVote(null);
+    set(usersRef, {});
+    set(votesRef, { votes: {}, revealVotes: false });
   };
 
   // Toggle revealVotes state between true and false
   const revealVotesHandler = () => {
-    const newRevealState = !reveal;  // Toggle the reveal state
-    setReveal(newRevealState);  // Update the local state
+    const newRevealState = !reveal;
+    setReveal(newRevealState);
 
-    // Update the revealVotes state in Firebase
     set(votesRef, { 
       votes, 
       revealVotes: newRevealState 
@@ -173,7 +179,7 @@ export default function ScrumPoker() {
         </button>
       </motion.div>
 
-      {/* Displaying votes for each user */}
+      {/* voting results/user cards */}
       <motion.div 
         className="space-y-4 mb-8"
         initial={{ opacity: 0 }} 
