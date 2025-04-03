@@ -12,10 +12,25 @@ jobs:
     if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: ubuntu-latest
     steps:
+      steps:
+      # Step 1: Checkout code
       - uses: actions/checkout@v4
-      - run: npm run build
+
+      # Step 2: Set up Node.js
+      - uses: actions/setup-node@v2
+        with:
+          node-version: '16'  # You can change this to the version you're using
+
+      # Step 3: Install dependencies
+      - run: npm install  # This will install Vite and other dependencies
+
+      # Step 4: Build the project
+      - run: npm run build  # This will trigger Vite's build command
+
+      # Step 5: Deploy to Firebase Hosting
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SCRUM_POKER_APP_50640 }}
+          channelId: live
           projectId: scrum-poker-app-50640
