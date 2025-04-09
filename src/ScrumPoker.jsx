@@ -16,7 +16,7 @@ import {
 import { v4 as uuidv4 } from "uuid";
 
 const POINTS = [1, 2, 3, 5, 8, 13];
-const DANIEL_NAMES = ["daniel", "dk", "daniel k", "dan", "daniel kaczorek"];
+const DANIEL_NAMES = ["diddy", "diddy k", "dk", "d k", "danielk", "daniel k", "dan", "dan k", "daniel kaczorek", "kaczorek"];
 
 export default function ScrumPoker() {
   const [votes, setVotes] = useState({});
@@ -29,6 +29,12 @@ export default function ScrumPoker() {
   const [showDanielModal, setShowDanielModal] = useState(false);
   const [showStats, setShowStats] = useState(false);
   const [guid, setGuid] = useState("");
+  const [countdown, setCountdown] = useState(0);
+  const [showCountdown, setShowCountdown] = useState(false);
+  const [shake, setShake] = useState(false);
+  const [isVotingAllowed, setIsVotingAllowed] = useState(true);
+  const [showFunnyPopup, setShowFunnyPopup] = useState(false);
+  const [funnyGif, setFunnyGif] = useState("");
 
   useEffect(() => {
     const cookie = document.cookie
@@ -39,7 +45,7 @@ export default function ScrumPoker() {
       const decoded = decodeURIComponent(cookie.split("=")[1]);
       const [storedName, storedRole, storedGuid] = decoded.split("|");
 
-      setGuid(storedGuid); 
+      setGuid(storedGuid);
 
       onValue(usersRef, (snapshot) => {
         const usersData = snapshot.val();
@@ -61,6 +67,8 @@ export default function ScrumPoker() {
       if (data) {
         setVotes(data.votes || {});
         setReveal(data.revealVotes || false);
+        setCountdown(data.countdown || 0);
+        setShowCountdown((data.countdown || 0) > 0);
       }
     });
 
@@ -77,18 +85,81 @@ export default function ScrumPoker() {
     const removeUser = onChildRemoved(usersRef, (snapshot) => {
       const userData = snapshot.val();
       setUsers((prevUsers) => prevUsers.filter((user) => user.name !== userData.name));
-      unsubscribeVotes();
     });
 
     return () => {
       unsubscribeVotes();
-      addUser();
-      removeUser();
     };
   }, []);
 
+  useEffect(() => {
+    // only trigger shake if we previously had a selected vote and now votes are empty
+    if (selectedVote !== null && Object.keys(votes).length === 0) {
+      setShake(true);
+      setTimeout(() => setShake(false), 500);
+      setSelectedVote(null);
+      setIsVotingAllowed(false);
+    }
+  }, [votes]);
+
+  useEffect(() => {
+    if (countdown > 0) {
+      const interval = setInterval(() => {
+        setCountdown((prev) => {
+          const newVal = prev - 1;
+          update(votesRef, { countdown: newVal });
+          return newVal;
+        });
+      }, 1000);
+
+      return () => clearInterval(interval);
+    } else {
+      setShowCountdown(false);
+      setIsVotingAllowed(!isVotingAllowed);
+    }
+  }, [countdown]);
+
+  useEffect(() => {
+    if (shake) {
+      const timeout = setTimeout(() => setShake(false), 600);
+      return () => clearTimeout(timeout);
+    }
+  }, [shake]);
+
+  const startCountdown = (seconds = 10) => {
+    setIsVotingAllowed(false);
+    setShowCountdown(true);
+    update(votesRef, { countdown: seconds });
+
+    const interval = setInterval(() => {
+      setCountdown((prev) => {
+        const newVal = prev - 1;
+        update(votesRef, { countdown: newVal });
+        return newVal;
+      });
+    }, 1000);
+
+    setTimeout(() => {
+      setIsVotingAllowed(!isVotingAllowed);
+      clearInterval(interval);
+    }, seconds * 1000);
+  };
+
   const handleVote = (point) => {
     if (name) {
+      const voteValues = Object.values(votes);
+  
+      if (voteValues.length > 0) {
+        const minVote = Math.min(...voteValues);
+        const selectedVoteIndex = POINTS.indexOf(point);
+        const minVoteIndex = POINTS.indexOf(minVote);
+
+        if (selectedVoteIndex > minVoteIndex + 2) {
+          setFunnyGif("https://media4.giphy.com/media/v1.Y2lkPTc5MGI3NjExbWp1cTk5amtwdG91bTNtbTExbXU1YnZqN2tlaGVxeHFoYmliZWJzdyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/pICj6JWqVpm5aapOIS/giphy.gif");  // Use a fun gif here
+          setShowFunnyPopup(true);
+        }
+      }
+  
       update(votesRef, {
         [`votes/${name}`]: point,
       });
@@ -103,30 +174,30 @@ export default function ScrumPoker() {
         setShowDanielModal(true);
         return;
       }
-  
+
       if (users.some((u) => u.name === name)) {
         alert("This name is already taken. Please choose a different name.");
         return;
       }
-  
+
       const newGuid = uuidv4();
       const cookieValue = `${name}|${role}|${newGuid}`;
       document.cookie = `userData=${encodeURIComponent(cookieValue)}; path=/; max-age=31536000; SameSite=None; Secure`;
-  
+
       setGuid(newGuid);
-  
+
       await update(usersRef, {
         [newGuid]: {
           name,
           role,
         },
       });
-  
+
       setName(name);
       setRole(role);
       setHasJoined(true);
     }
-  };  
+  };
 
   const handleLogout = () => {
     const cookie = document.cookie
@@ -149,9 +220,12 @@ export default function ScrumPoker() {
     set(votesRef, {
       votes: {},
       revealVotes: false,
+      countdown: 0,
     });
+
     setSelectedVote(null);
     setShowStats(false);
+    setIsVotingAllowed(false);
   };
 
   const clearUsers = () => {
@@ -164,7 +238,7 @@ export default function ScrumPoker() {
     setVotes({});
     setSelectedVote(null);
     set(usersRef, {});
-    set(votesRef, { votes: {}, revealVotes: false });
+    set(votesRef, { votes: {}, revealVotes: false, countdown: 0 });
     setShowStats(false);
   };
 
@@ -174,11 +248,10 @@ export default function ScrumPoker() {
     set(votesRef, {
       votes,
       revealVotes: newRevealState,
+      countdown: 0,
     });
 
-    if (newRevealState) {
-      setShowStats(true);
-    }
+    setShowStats(newRevealState);
   };
 
   const voteStats = () => {
@@ -195,6 +268,29 @@ export default function ScrumPoker() {
     return { countByVote, avg, closest, allSame };
   };
 
+  if (showFunnyPopup) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-blue-100">
+        <div className="bg-white p-6 rounded-lg shadow-lg text-center">
+          <h2 className="text-2xl font-bold mb-4">Are you sure about that vote?</h2>
+          <img
+            src={funnyGif}
+            alt="Funny Gif"
+            className="mx-auto rounded-lg mb-4"
+          />
+          <button
+            onClick={() => {
+              setShowFunnyPopup(false);
+            }}
+            className="mt-6 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+          >
+            Yes, I'm sure!
+          </button>
+        </div>
+      </div>
+    );
+  }
+  
   if (showDanielModal) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-red-100">
@@ -234,7 +330,8 @@ export default function ScrumPoker() {
           onChange={(e) => setRole(e.target.value)}
         >
           <option value="">Select Role</option>
-          <option value="Dev">Developer</option>
+          <option value="CMS">CMS Developer/Tester</option>
+          <option value="ECOM">Commerce Developer/Tester</option>
           <option value="Platform">Platform</option>
         </select>
         <button
@@ -249,10 +346,15 @@ export default function ScrumPoker() {
   }
 
   const { countByVote, avg, closest, allSame } = voteStats();
-  const devUsers = users.filter((u) => u.role.toLowerCase().includes("dev"));
+  const devUsers = users.filter((u) => u.role.toLowerCase().includes("cms"));
 
   return (
-    <div className="bg-gray-100 p-6 md:p-8 max-w-4xl mx-auto rounded-lg shadow-lg">
+
+    <motion.div
+      className="bg-gray-100 p-6 md:p-8 max-w-4xl mx-auto rounded-lg shadow-lg"
+      animate={shake ? { x: [-10, 10, -10, 10, 0] } : {}}
+      transition={{ duration: 0.4 }}
+    >
       <div className="flex justify-between items-center mb-4">
         <div></div>
         <button
@@ -277,31 +379,55 @@ export default function ScrumPoker() {
         </p>
       </motion.div>
 
+      {showCountdown && (
+        <motion.div
+          className="text-4xl font-bold text-center text-red-600 mb-4"
+          initial={{ opacity: 0, scale: 0.5 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.3 }}
+        >
+          Voting starts in: {countdown}s
+        </motion.div>
+      )}
+
       <motion.div
         className="text-center mb-8"
         initial={{ opacity: 0, scale: 0 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.5 }}
       >
-        {role === "Dev" && (
+        {role === "ECOM" || role === "CMS" && (
           <div className="grid grid-cols-3 gap-4 mb-6">
             {POINTS.map((point) => (
-              <button
-                key={point}
+              <motion.button
+                key={`vote-${point}`}
                 onClick={() => handleVote(point)}
-                className={`p-4 rounded-lg text-xl transition ${selectedVote === point
-                    ? "border-4 border-orange-500"
-                    : "bg-blue-500 text-white hover:bg-blue-600"
+                disabled={!isVotingAllowed || showCountdown}
+                className={`p-4 rounded-lg text-xl transition ${selectedVote !== null && selectedVote === point
+                  ? "border-4 border-orange-500"
+                  : `bg-blue-500 text-white ${!isVotingAllowed || showCountdown ? "opacity-50 cursor-not-allowed" : "hover:bg-blue-600"}`
                   }`}
+                animate={shake && selectedVote === point ? {
+                  x: [-10, 10, -10, 10, -6, 6, -3, 3, 0],
+                  rotate: [-5, 5, -5, 5, -2, 2, 0],
+                } : {}}
+                transition={{ duration: 0.6, type: "spring", stiffness: 300 }}
               >
                 {point}
-              </button>
+              </motion.button>
             ))}
           </div>
         )}
 
         {role === "Platform" && (
           <>
+            <button
+              className="p-3 bg-gray-500 text-white rounded-lg m-2 w-80 hover:bg-gray-600 transition"
+              onClick={() => startCountdown(3)}
+            >
+              Start Countdown to Vote
+            </button>
+
             <button
               className="p-3 bg-gray-500 text-white rounded-lg m-2 w-80 hover:bg-gray-600 transition"
               onClick={revealVotesHandler}
@@ -321,13 +447,6 @@ export default function ScrumPoker() {
               onClick={clearUsers}
             >
               Clear Users
-            </button>
-
-            <button
-              className="p-3 bg-gray-500 text-white rounded-lg m-2 w-80 hover:bg-gray-600 transition"
-              onClick={cleanSession}
-            >
-              Clean Session
             </button>
           </>
         )}
@@ -363,17 +482,21 @@ export default function ScrumPoker() {
         {devUsers.map((user) => (
           <div
             key={user.name}
-            className="p-4 border rounded-lg bg-white text-lg font-semibold text-gray-800 shadow-md"
+            className={`p-4 border rounded-lg text-lg font-semibold text-gray-800 shadow-md 
+              ${role === "Platform" && votes[user.name] ? 'bg-green-100 border-green-500' : 'bg-white border-gray-300'}`
+            }
           >
             <div className="flex justify-between items-center">
               <span>{user.name}</span>
               <span className="text-gray-600">
-                {reveal || user.name === name ? votes[user.name] : "?"}
+                {reveal || user.name === name
+                  ? votes[user.name] || "?"
+                  : "?"}
               </span>
             </div>
           </div>
         ))}
       </motion.div>
-    </div>
+    </motion.div>
   );
 }
