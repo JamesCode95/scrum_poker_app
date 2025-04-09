@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
+import Confetti from "react-confetti";
 import {
   votesRef,
   usersRef,
@@ -22,6 +23,7 @@ export default function ScrumPoker() {
   const [role, setRole] = useState("");
   const [hasJoined, setHasJoined] = useState(false);
   const [showDanielModal, setShowDanielModal] = useState(false);
+  const [showStats, setShowStats] = useState(false);
 
   useEffect(() => {
     const unsubscribeVotes = onValue(votesRef, (snapshot) => {
@@ -97,6 +99,7 @@ export default function ScrumPoker() {
       revealVotes: false,
     });
     setSelectedVote(null);
+    setShowStats(false);
   };
 
   const clearUsers = () => {
@@ -110,6 +113,7 @@ export default function ScrumPoker() {
     setSelectedVote(null);
     set(usersRef, {});
     set(votesRef, { votes: {}, revealVotes: false });
+    setShowStats(false);
   };
 
   const revealVotesHandler = () => {
@@ -119,6 +123,24 @@ export default function ScrumPoker() {
       votes,
       revealVotes: newRevealState,
     });
+
+    if (newRevealState) {
+      setShowStats(true);
+    }
+  };
+
+  const voteStats = () => {
+    const voteValues = Object.values(votes);
+    const countByVote = {};
+    voteValues.forEach((v) => {
+      countByVote[v] = (countByVote[v] || 0) + 1;
+    });
+    const avg = voteValues.reduce((a, b) => a + b, 0) / voteValues.length || 0;
+    const closest = POINTS.reduce((prev, curr) =>
+      Math.abs(curr - avg) < Math.abs(prev - avg) ? curr : prev
+    );
+    const allSame = voteValues.every((v) => v === voteValues[0]);
+    return { countByVote, avg, closest, allSame };
   };
 
   if (showDanielModal) {
@@ -174,8 +196,12 @@ export default function ScrumPoker() {
     );
   }
 
+  const { countByVote, avg, closest, allSame } = voteStats();
+
   return (
     <div className="bg-gray-100 p-6 md:p-8 max-w-4xl mx-auto rounded-lg shadow-lg">
+      {allSame && reveal && <Confetti />}
+
       <motion.div
         className="text-center mb-8"
         initial={{ opacity: 0 }}
@@ -183,7 +209,9 @@ export default function ScrumPoker() {
         transition={{ duration: 0.5 }}
       >
         <h1 className="text-4xl font-bold text-gray-800 mb-4">Scrum Poker</h1>
-        <p className="text-lg text-gray-600 mb-2">Welcome, {name} ({role})</p>
+        <p className="text-lg text-gray-600 mb-2">
+          Welcome, {name} ({role})
+        </p>
       </motion.div>
 
       <motion.div
@@ -198,7 +226,11 @@ export default function ScrumPoker() {
               <button
                 key={point}
                 onClick={() => handleVote(point)}
-                className={`p-4 rounded-lg text-xl transition ${selectedVote === point ? "border-4 border-orange-500" : "bg-blue-500 text-white hover:bg-blue-600"}`}
+                className={`p-4 rounded-lg text-xl transition ${
+                  selectedVote === point
+                    ? "border-4 border-orange-500"
+                    : "bg-blue-500 text-white hover:bg-blue-600"
+                }`}
               >
                 {point}
               </button>
@@ -239,6 +271,27 @@ export default function ScrumPoker() {
         )}
       </motion.div>
 
+      {showStats && (
+        <motion.div
+          className="bg-white p-4 rounded-lg shadow mb-6"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.3 }}
+        >
+          <p className="text-lg font-semibold">📊 Voting Stats</p>
+          <p>Average: {avg.toFixed(2)}</p>
+          <p>Closest Option: {closest}</p>
+          <p>Vote Counts:</p>
+          <ul className="list-disc pl-6">
+            {Object.entries(countByVote).map(([point, count]) => (
+              <li key={point}>
+                {point}: {count}
+              </li>
+            ))}
+          </ul>
+        </motion.div>
+      )}
+
       <motion.div
         className="space-y-4 mb-8"
         initial={{ opacity: 0 }}
@@ -253,7 +306,7 @@ export default function ScrumPoker() {
             <div className="flex justify-between items-center">
               <span>{user}</span>
               <span className="text-gray-600">
-                {reveal || votes[user] === selectedVote ? votes[user] : "?"}
+                {reveal || user === name ? votes[user] : "?"}
               </span>
             </div>
           </div>
