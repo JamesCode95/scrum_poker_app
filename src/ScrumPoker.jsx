@@ -16,7 +16,7 @@ import {
 import { v4 as uuidv4 } from "uuid";
 
 const POINTS = [1, 2, 3, 5, 8, 13];
-const DANIEL_NAMES = ["diddy", "diddy k", "dk", "d k", "danielk", "daniel k", "dan", "dan k", "daniel kaczorek", "kaczorek"];
+const EXCLUDED_DANIEL_NAMES = ["diddy", "diddy k", "dk", "d k", "danielk", "daniel k", "dan", "dan k", "daniel kaczorek", "kaczorek"];
 
 export default function ScrumPoker() {
   const [votes, setVotes] = useState({});
@@ -148,7 +148,7 @@ export default function ScrumPoker() {
   const handleVote = (point) => {
     if (name) {
       const voteValues = Object.values(votes);
-  
+
       if (voteValues.length > 0) {
         const minVote = Math.min(...voteValues);
         const selectedVoteIndex = POINTS.indexOf(point);
@@ -159,7 +159,7 @@ export default function ScrumPoker() {
           setShowFunnyPopup(true);
         }
       }
-  
+
       update(votesRef, {
         [`votes/${name}`]: point,
       });
@@ -170,7 +170,7 @@ export default function ScrumPoker() {
   const handleJoin = async () => {
     if (name && role) {
       const lowerName = name.toLowerCase();
-      if (DANIEL_NAMES.some((dn) => lowerName.includes(dn))) {
+      if (EXCLUDED_DANIEL_NAMES.includes(lowerName)) {
         setShowDanielModal(true);
         return;
       }
@@ -290,13 +290,13 @@ export default function ScrumPoker() {
       </div>
     );
   }
-  
+
   if (showDanielModal) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-red-100">
         <div className="bg-white p-6 rounded-lg shadow-lg text-center">
           <h2 className="text-2xl font-bold mb-4">Not you again...</h2>
-          <p className="text-lg mb-6">Get out of here Daniel...</p>
+          <p className="text-lg mb-6">Get out of here Daniel Kaczorek...</p>
           <img
             src="https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif"
             alt="Shoo Daniel"
@@ -315,54 +315,77 @@ export default function ScrumPoker() {
 
   if (!hasJoined) {
     return (
-      <div className="bg-gray-100 min-h-screen flex flex-col justify-center items-center p-6">
-        <h1 className="text-3xl font-bold mb-4">Welcome to Scrum Poker</h1>
-        <input
-          className="p-2 border rounded-md text-lg w-64 mb-4"
-          type="text"
-          placeholder="Enter your name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-        <select
-          className="p-2 border rounded-md text-lg w-64 mb-4"
-          value={role}
-          onChange={(e) => setRole(e.target.value)}
-        >
-          <option value="">Select Role</option>
-          <option value="CMS">CMS Developer/Tester</option>
-          <option value="ECOM">Commerce Developer/Tester</option>
-          <option value="Platform">Platform</option>
-        </select>
+      <div className="max-w-md mx-auto mt-10 p-6 bg-gray-100 rounded-xl shadow-md">
+        <h2 className="text-2xl font-bold mb-4 text-center">Join Scrum Poker</h2>
+        <div className="mb-4">
+          <label className="block mb-1 text-gray-700">Name</label>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
+          />
+        </div>
+        <div className="mb-6">
+          <label className="block mb-1 text-gray-700">Role</label>
+          <div className="relative">
+            <select
+              value={role}
+              onChange={(e) => setRole(e.target.value)}
+              className="block w-full pl-3 pr-10 py-2 text-gray-700 bg-white border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-400 appearance-none"
+            >
+              <option value="">Select role</option>
+              <option value="CMS">CMS</option>
+              <option value="ECOM">ECOM</option>
+              <option value="Platform">Platform</option>
+            </select>
+            <span className="absolute inset-y-0 right-0 flex items-center px-2 text-gray-500 pointer-events-none">
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />
+              </svg>
+            </span>
+          </div>
+        </div>
+
         <button
-          className="p-2 bg-gray-800 text-white rounded-md w-64 hover:bg-gray-900 transition"
+          className="w-full bg-blue-500 text-white py-2 rounded hover:bg-blue-600 transition"
           onClick={handleJoin}
           disabled={!name || !role}
         >
-          Join Session
+          Join
         </button>
       </div>
+
     );
   }
 
   const { countByVote, avg, closest, allSame } = voteStats();
-  const devUsers = users.filter((u) => u.role.toLowerCase().includes("cms"));
+  const devRoles = ["cms", "ecom"];
+  const devUsers = users.filter((u) =>
+    devRoles.some((role) => u.role.toLowerCase().includes(role))
+  );
+
 
   return (
 
     <motion.div
-      className="bg-gray-100 p-6 md:p-8 max-w-4xl mx-auto rounded-lg shadow-lg"
+      className="bg-gray-100 p-6 m-0 mx-auto rounded-lg shadow-lg
+                 md:p-8 md:mt-12 md:max-w-2xl 
+                 lg:max-w-2xl"
       animate={shake ? { x: [-10, 10, -10, 10, 0] } : {}}
       transition={{ duration: 0.4 }}
     >
-      <div className="flex justify-between items-center mb-4">
-        <div></div>
-        <button
-          onClick={handleLogout}
-          className="text-sm bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600"
-        >
-          Leave Session
-        </button>
+      <div className="mb-4 md:mb-0">
+        <div className="md:flex justify-end">
+          <button
+            onClick={handleLogout}
+            className="fixed bottom-0 left-0 right-0 w-full bg-red-500 text-white px-3 py-3 text-center 
+                 md:static md:w-auto md:rounded md:py-1 z-50
+                 hover:bg-red-600"
+          >
+            Leave Session
+          </button>
+        </div>
       </div>
 
       {allSame && reveal && <Confetti />}
@@ -396,7 +419,7 @@ export default function ScrumPoker() {
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.5 }}
       >
-        {role === "ECOM" || role === "CMS" && (
+        {(role === "ECOM" || role === "CMS") && (
           <div className="grid grid-cols-3 gap-4 mb-6">
             {POINTS.map((point) => (
               <motion.button
@@ -422,28 +445,28 @@ export default function ScrumPoker() {
         {role === "Platform" && (
           <>
             <button
-              className="p-3 bg-gray-500 text-white rounded-lg m-2 w-80 hover:bg-gray-600 transition"
+              className="p-3 bg-gray-500 text-white rounded-lg m-2 w-60 md:w-75 hover:bg-gray-600 transition"
               onClick={() => startCountdown(3)}
             >
               Start Countdown to Vote
             </button>
 
             <button
-              className="p-3 bg-gray-500 text-white rounded-lg m-2 w-80 hover:bg-gray-600 transition"
+              className="p-3 bg-gray-500 text-white rounded-lg m-2 w-60 md:w-75 hover:bg-gray-600 transition"
               onClick={revealVotesHandler}
             >
               {reveal ? "Hide Votes" : "Reveal Votes"}
             </button>
 
             <button
-              className="p-3 bg-gray-500 text-white rounded-lg m-2 w-80 hover:bg-gray-600 transition"
+              className="p-3 bg-gray-500 text-white rounded-lg m-2 w-60 md:w-75 hover:bg-gray-600 transition"
               onClick={clearVotes}
             >
               Clear Votes
             </button>
 
             <button
-              className="p-3 bg-gray-500 text-white rounded-lg m-2 w-80 hover:bg-gray-600 transition"
+              className="p-3 bg-gray-500 text-white rounded-lg m-2 w-60 md:w-75 hover:bg-gray-600 transition"
               onClick={clearUsers}
             >
               Clear Users
