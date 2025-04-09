@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getDatabase, ref, set, update, onValue, onChildAdded, onChildRemoved } from "firebase/database";
+import { getDatabase, ref, set, update, remove, onValue, onChildAdded, onChildRemoved } from "firebase/database";
 
 // Firebase configuration
 const firebaseConfig = {
@@ -20,4 +20,4 @@ const db = getDatabase(app); // Initialize Realtime Database
 const votesRef = ref(db, 'votes');
 const usersRef = ref(db, 'users');
 
-export { db, votesRef, usersRef, set, update, onValue, onChildAdded, onChildRemoved };
+export { db, votesRef, usersRef, ref, set, update, remove, onValue, onChildAdded, onChildRemoved };

@@ -2,14 +2,18 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import Confetti from "react-confetti";
 import {
+  db,
   votesRef,
   usersRef,
+  ref,
   set,
   update,
   onValue,
   onChildAdded,
   onChildRemoved,
+  remove
 } from "./firebaseConfig";
+import { v4 as uuidv4 } from "uuid";
 
 const POINTS = [1, 2, 3, 5, 8, 13];
 const DANIEL_NAMES = ["daniel", "dk", "daniel k", "dan", "daniel kaczorek"];
@@ -24,6 +28,32 @@ export default function ScrumPoker() {
   const [hasJoined, setHasJoined] = useState(false);
   const [showDanielModal, setShowDanielModal] = useState(false);
   const [showStats, setShowStats] = useState(false);
+  const [guid, setGuid] = useState("");
+
+  useEffect(() => {
+    const cookie = document.cookie
+      .split("; ")
+      .find((row) => row.startsWith("userData="));
+
+    if (cookie) {
+      const decoded = decodeURIComponent(cookie.split("=")[1]);
+      const [storedName, storedRole, storedGuid] = decoded.split("|");
+
+      setGuid(storedGuid); 
+
+      onValue(usersRef, (snapshot) => {
+        const usersData = snapshot.val();
+        if (usersData && usersData[storedGuid]) {
+          const { name: firebaseName, role: firebaseRole } = usersData[storedGuid];
+          setName(firebaseName);
+          setRole(firebaseRole);
+          setHasJoined(true);
+        } else {
+          document.cookie = "userData=; path=/; max-age=0";
+        }
+      }, { onlyOnce: true });
+    }
+  }, []);
 
   useEffect(() => {
     const unsubscribeVotes = onValue(votesRef, (snapshot) => {
@@ -35,18 +65,19 @@ export default function ScrumPoker() {
     });
 
     const addUser = onChildAdded(usersRef, (snapshot) => {
-      const userName = snapshot.key;
+      const userData = snapshot.val();
       setUsers((prevUsers) => {
-        if (!prevUsers.includes(userName)) {
-          return [...prevUsers, userName];
+        if (!prevUsers.some((u) => u.name === userData.name)) {
+          return [...prevUsers, userData];
         }
         return prevUsers;
       });
     });
 
     const removeUser = onChildRemoved(usersRef, (snapshot) => {
-      const userName = snapshot.key;
-      setUsers((prevUsers) => prevUsers.filter((user) => user !== userName));
+      const userData = snapshot.val();
+      setUsers((prevUsers) => prevUsers.filter((user) => user.name !== userData.name));
+      unsubscribeVotes();
     });
 
     return () => {
@@ -65,32 +96,53 @@ export default function ScrumPoker() {
     }
   };
 
-  const handleJoin = () => {
+  const handleJoin = async () => {
     if (name && role) {
       const lowerName = name.toLowerCase();
       if (DANIEL_NAMES.some((dn) => lowerName.includes(dn))) {
         setShowDanielModal(true);
         return;
       }
-
-      let uniqueName = name;
-      if (users.includes(name)) {
-        let counter = 1;
-        while (users.includes(`${name}${counter}`)) {
-          counter++;
-        }
-        uniqueName = `${name}${counter}`;
+  
+      if (users.some((u) => u.name === name)) {
+        alert("This name is already taken. Please choose a different name.");
+        return;
       }
-
-      if (role === "Dev") {
-        update(usersRef, {
-          [uniqueName]: true,
-        });
-      }
-
-      setName(uniqueName);
+  
+      const newGuid = uuidv4();
+      const cookieValue = `${name}|${role}|${newGuid}`;
+      document.cookie = `userData=${encodeURIComponent(cookieValue)}; path=/; max-age=31536000; SameSite=None; Secure`;
+  
+      setGuid(newGuid);
+  
+      await update(usersRef, {
+        [newGuid]: {
+          name,
+          role,
+        },
+      });
+  
+      setName(name);
+      setRole(role);
       setHasJoined(true);
     }
+  };  
+
+  const handleLogout = () => {
+    const cookie = document.cookie
+      .split("; ")
+      .find((row) => row.startsWith("userData="));
+
+    if (cookie) {
+      const decoded = decodeURIComponent(cookie.split("=")[1]);
+      const [, , guid] = decoded.split("|");
+      if (guid) {
+        remove(ref(db, `users/${guid}`));
+      }
+    }
+
+    document.cookie = "userData=; path=/; max-age=0";
+    window.location.reload();
   };
 
   const clearVotes = () => {
@@ -197,9 +249,20 @@ export default function ScrumPoker() {
   }
 
   const { countByVote, avg, closest, allSame } = voteStats();
+  const devUsers = users.filter((u) => u.role.toLowerCase().includes("dev"));
 
   return (
     <div className="bg-gray-100 p-6 md:p-8 max-w-4xl mx-auto rounded-lg shadow-lg">
+      <div className="flex justify-between items-center mb-4">
+        <div></div>
+        <button
+          onClick={handleLogout}
+          className="text-sm bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600"
+        >
+          Leave Session
+        </button>
+      </div>
+
       {allSame && reveal && <Confetti />}
 
       <motion.div
@@ -226,11 +289,10 @@ export default function ScrumPoker() {
               <button
                 key={point}
                 onClick={() => handleVote(point)}
-                className={`p-4 rounded-lg text-xl transition ${
-                  selectedVote === point
+                className={`p-4 rounded-lg text-xl transition ${selectedVote === point
                     ? "border-4 border-orange-500"
                     : "bg-blue-500 text-white hover:bg-blue-600"
-                }`}
+                  }`}
               >
                 {point}
               </button>
@@ -298,15 +360,15 @@ export default function ScrumPoker() {
         animate={{ opacity: 1 }}
         transition={{ duration: 0.5 }}
       >
-        {users.map((user) => (
+        {devUsers.map((user) => (
           <div
-            key={user}
+            key={user.name}
             className="p-4 border rounded-lg bg-white text-lg font-semibold text-gray-800 shadow-md"
           >
             <div className="flex justify-between items-center">
-              <span>{user}</span>
+              <span>{user.name}</span>
               <span className="text-gray-600">
-                {reveal || user === name ? votes[user] : "?"}
+                {reveal || user.name === name ? votes[user.name] : "?"}
               </span>
             </div>
           </div>
