@@ -315,7 +315,7 @@ export default function ScrumPoker() {
 
   if (!hasJoined) {
     return (
-      <div className="max-w-md mx-auto mt-10 p-6 bg-gray-100 rounded-xl shadow-md">
+      <div className="max-w-md mx-auto min-h-screen p-6 bg-gray-100 rounded-xl shadow-md md:mt-10 md:min-h-0">
         <h2 className="text-2xl font-bold mb-4 text-center">Scrum Poker</h2>
         <div className="mb-4">
           <label className="block mb-1 text-gray-700">Name</label>
