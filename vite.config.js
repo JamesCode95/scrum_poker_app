@@ -5,6 +5,10 @@ export default defineConfig({
   plugins: [react()],
   build: {
     outDir: 'dist',
+    minify: 'terser',
+    treeshake: true,
+    sourcemap: false,
+    compress: true,
     rollupOptions: {
       input: './index.html',
     },
