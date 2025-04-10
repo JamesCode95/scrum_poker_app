@@ -369,8 +369,8 @@ export default function ScrumPoker() {
   return (
 
     <motion.div
-      className="bg-gray-100 p-6 m-0 mx-auto rounded-lg shadow-lg
-                 md:p-8 md:mt-12 md:max-w-2xl 
+      className="bg-gray-100 p-6 m-0 mx-auto rounded-lg shadow-lg min-h-screen
+                 md:min-h-0 md:p-8 md:mt-12 md:max-w-2xl 
                  lg:max-w-2xl"
       animate={shake ? { x: [-10, 10, -10, 10, 0] } : {}}
       transition={{ duration: 0.4 }}
